@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
+import saudSaeedAvatar from "@/assets/saud-saeed-avatar.png.asset.json";
 import {
   computeRow,
   emptyRow,
