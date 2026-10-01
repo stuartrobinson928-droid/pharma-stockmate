@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
+import saudSaeedAvatar from "@/assets/saud-saeed-avatar.png.asset.json";
 import {
   computeRow,
   emptyRow,
@@ -491,32 +492,36 @@ function Index() {
           TP = Retail × (100 − Cp Dis %) / 100 · S.Price = TP · Net Unit = TP × (100 − Disc %) / 100 · Item Total = Net Unit × Stock
         </p>
 
-        <footer className="mt-10 border-t border-rule pt-4 no-print">
-          <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
-            <span className="font-display text-xs text-inksoft">
-              Stock Addition Calculator · Accurate figures, every batch.
-            </span>
+        <footer className="mt-10 border-t border-rule pt-5 no-print">
+          <div className="flex flex-col items-center gap-1.5 text-center">
             <div className="flex items-center gap-3">
-              <span className="hidden h-px w-8 bg-rule sm:block" aria-hidden />
-              <div className="text-right leading-tight">
-                <span className="block text-[9px] font-medium uppercase tracking-[0.25em] text-inksoft">
-                  Developed by
-                </span>
-                <span className="block font-display text-sm font-semibold tracking-tight text-ink">
-                  Saud Saeed
-                  <span className="ml-1 align-super text-[9px] font-normal text-gold">™</span>
-                </span>
-                <span className="block text-[10px] uppercase tracking-[0.18em] text-inksoft">
-                  Senior Software Developer
-                </span>
-              </div>
               <span
                 aria-hidden
-                className="grid size-9 place-items-center rounded-full bg-ink font-display text-[11px] font-semibold tracking-tight text-paper ring-2 ring-gold/40"
-              >
-                SS
-              </span>
+                className="h-px w-16 bg-gradient-to-r from-transparent to-gold/60 sm:w-24"
+              />
+              <img
+                src={saudSaeedAvatar.url}
+                alt="Saud Saeed"
+                className="size-14 rounded-full bg-paper object-cover ring-2 ring-gold/50 shadow-[0_2px_10px_-2px] shadow-ink/25"
+              />
+              <span
+                aria-hidden
+                className="h-px w-16 bg-gradient-to-l from-transparent to-gold/60 sm:w-24"
+              />
             </div>
+            <span className="mt-1.5 text-[9px] font-medium uppercase tracking-[0.3em] text-inksoft">
+              Developed by
+            </span>
+            <span className="font-display text-base font-semibold tracking-tight text-ink">
+              Saud Saeed
+              <span className="ml-1 align-super text-[9px] font-normal text-gold">™</span>
+            </span>
+            <span className="text-[10px] uppercase tracking-[0.22em] text-inksoft">
+              Senior Software Developer
+            </span>
+            <span className="mt-1 font-mono text-[10px] italic text-inksoft/80">
+              Stock Addition Calculator · Accurate figures, every batch.
+            </span>
           </div>
         </footer>
       </div>
