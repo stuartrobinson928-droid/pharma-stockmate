@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import saudSaeedAvatar from "@/assets/saud-saeed-avatar.png.asset.json";
+
 import {
   computeRow,
   emptyRow,
@@ -500,7 +500,7 @@ function Index() {
                 className="h-px w-16 bg-gradient-to-r from-transparent to-gold/60 sm:w-24"
               />
               <img
-                src={saudSaeedAvatar.url}
+                src="/saud-saeed-avatar.png"
                 alt="Saud Saeed"
                 className="size-14 rounded-full bg-paper object-cover ring-2 ring-gold/50 shadow-[0_2px_10px_-2px] shadow-ink/25"
               />
