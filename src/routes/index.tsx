@@ -491,11 +491,33 @@ function Index() {
           TP = Retail × (100 − Cp Dis %) / 100 · S.Price = TP · Net Unit = TP × (100 − Disc %) / 100 · Item Total = Net Unit × Stock
         </p>
 
-        <footer className="mt-10 flex flex-wrap items-center justify-between gap-2 border-t border-rule pt-4 text-xs text-inksoft">
-          <span className="font-display">Stock Addition Calculator · Accurate figures, every batch.</span>
-          <span className="font-display font-medium text-ink">
-            Developed by Saud Saeed<sup className="ml-0.5 text-[9px]">™</sup>
-          </span>
+        <footer className="mt-10 border-t border-rule pt-4 no-print">
+          <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+            <span className="font-display text-xs text-inksoft">
+              Stock Addition Calculator · Accurate figures, every batch.
+            </span>
+            <div className="flex items-center gap-3">
+              <span className="hidden h-px w-8 bg-rule sm:block" aria-hidden />
+              <div className="text-right leading-tight">
+                <span className="block text-[9px] font-medium uppercase tracking-[0.25em] text-inksoft">
+                  Developed by
+                </span>
+                <span className="block font-display text-sm font-semibold tracking-tight text-ink">
+                  Saud Saeed
+                  <span className="ml-1 align-super text-[9px] font-normal text-gold">™</span>
+                </span>
+                <span className="block text-[10px] uppercase tracking-[0.18em] text-inksoft">
+                  Senior Software Developer
+                </span>
+              </div>
+              <span
+                aria-hidden
+                className="grid size-9 place-items-center rounded-full bg-ink font-display text-[11px] font-semibold tracking-tight text-paper ring-2 ring-gold/40"
+              >
+                SS
+              </span>
+            </div>
+          </div>
         </footer>
       </div>
 
