@@ -83,18 +83,156 @@ function Index() {
     return { stock, grand };
   }, [rows, calcs]);
 
+  // Ask the browser to keep this site's storage permanently (not auto-evicted)
+  useEffect(() => {
+    navigator.storage?.persist?.().catch(() => {});
+    try {
+      setHasBackup(!!localStorage.getItem(BACKUP_KEY));
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const [hasBackup, setHasBackup] = useState(false);
+  const [confirm, setConfirm] = useState<null | {
+    title: string;
+    body: string;
+    action: () => void;
+  }>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const snapshot = () => {
+    try {
+      localStorage.setItem(BACKUP_KEY, JSON.stringify(rows));
+      setHasBackup(true);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const restoreBackup = () => {
+    try {
+      const raw = localStorage.getItem(BACKUP_KEY);
+      const parsed = raw ? JSON.parse(raw) : null;
+      if (Array.isArray(parsed) && parsed.length) {
+        localStorage.setItem(BACKUP_KEY, JSON.stringify(rows));
+        setRows(parsed);
+      }
+    } catch {
+      setError("Could not restore the backup.");
+    }
+  };
+
   const updateRow = (id: string, field: keyof StockRow, value: string) => {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
   };
 
   const addRow = () => setRows((prev) => [...prev, emptyRow()]);
 
-  const deleteRow = (id: string) =>
-    setRows((prev) => (prev.length > 1 ? prev.filter((r) => r.id !== id) : [emptyRow()]));
+  const rowHasData = (r: StockRow) =>
+    ["code", "name", "batchNo", "cmp", "retail", "cpDis", "stock", "bon", "stax", "disc"].some(
+      (k) => String(r[k as keyof StockRow] ?? "").trim() !== "",
+    );
 
-  const clearAll = () => setRows([emptyRow()]);
+  const deleteRow = (id: string, index: number) => {
+    const doDelete = () => {
+      snapshot();
+      setRows((prev) => (prev.length > 1 ? prev.filter((r) => r.id !== id) : [emptyRow()]));
+    };
+    const row = rows.find((r) => r.id === id);
+    if (row && rowHasData(row)) {
+      setConfirm({
+        title: `Delete row ${index + 1}?`,
+        body: `"${row.name || row.code || "This line"}" will be removed. You can undo with "Restore backup".`,
+        action: doDelete,
+      });
+    } else doDelete();
+  };
 
-  const resetToSample = () => setRows(seedRows());
+  const clearAll = () =>
+    setConfirm({
+      title: "Clear the whole sheet?",
+      body: `All ${rows.length} line(s) will be erased. A backup is kept so you can restore it.`,
+      action: () => {
+        snapshot();
+        setRows([emptyRow()]);
+      },
+    });
+
+  const resetToSample = () =>
+    setConfirm({
+      title: "Replace sheet with sample?",
+      body: "Your current lines will be replaced. A backup is kept so you can restore it.",
+      action: () => {
+        snapshot();
+        setRows(seedRows());
+      },
+    });
+
+  const exportBackup = () => {
+    const blob = new Blob([JSON.stringify(rows, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `stock-sheet-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
+  const importBackup = (file: File) => {
+    file.text().then((txt) => {
+      try {
+        const parsed = JSON.parse(txt);
+        if (!Array.isArray(parsed) || !parsed.length || !parsed.every((r) => r && typeof r.id === "string")) {
+          throw new Error();
+        }
+        const clean = parsed.map((r) => ({ ...emptyRow(), ...r })) as StockRow[];
+        setConfirm({
+          title: "Load this backup file?",
+          body: `${clean.length} line(s) will replace the current sheet. Current sheet is kept as a backup.`,
+          action: () => {
+            snapshot();
+            setRows(clean);
+          },
+        });
+      } catch {
+        setError("That file is not a valid stock sheet backup.");
+      }
+    });
+  };
+
+  // ---- validation ----
+  const NUM_RULES: Partial<Record<keyof StockRow, { max?: number; int?: boolean }>> = {
+    retail: { max: 10_000_000 },
+    cpDis: { max: 100 },
+    stock: { int: true, max: 10_000_000 },
+    bon: { int: true, max: 10_000_000 },
+    stax: { max: 100 },
+    disc: { max: 100 },
+  };
+
+  const handleNum = (id: string, field: keyof StockRow, value: string) => {
+    const rule = NUM_RULES[field] ?? {};
+    const v = value.replace(/,/g, "").trim();
+    const re = rule.int ? /^\d*$/ : /^\d*\.?\d{0,2}$/;
+    if (!re.test(v)) {
+      setError(rule.int ? "Only whole numbers allowed here." : "Only numbers with up to 2 decimals allowed.");
+      return;
+    }
+    if (rule.max !== undefined && v !== "" && Number(v) > rule.max) {
+      setError(rule.max === 100 ? "Percentage cannot exceed 100." : "Value is too large.");
+      return;
+    }
+    setError(null);
+    updateRow(id, field, v);
+  };
+
+  const rowIssue = (r: StockRow): string | null => {
+    const hasNums = num(r.retail) > 0 || num(r.stock) > 0;
+    if (hasNums && !r.name.trim()) return "Medicine name is missing";
+    if (num(r.stock) > 0 && num(r.retail) <= 0) return "Retail price is missing";
+    if (num(r.retail) > 0 && num(r.stock) <= 0) return "Stock quantity is missing";
+    return null;
+  };
 
   const textCell = (
     id: string,
@@ -110,13 +248,24 @@ function Index() {
         value={row[field]}
         placeholder={placeholder}
         aria-label={label}
+        maxLength={80}
         onChange={(e) => updateRow(id, field, e.target.value)}
       />
     </td>
   );
 
-  const numCell = (id: string, row: StockRow, field: keyof StockRow, label: string, w: string) =>
-    textCell(id, row, field, label, "0", `${w} text-right`);
+  const numCell = (id: string, row: StockRow, field: keyof StockRow, label: string, w: string) => (
+    <td className="px-1 py-1">
+      <input
+        className={`cell-input font-mono text-[13px] ${w} text-right`}
+        value={row[field]}
+        placeholder="0"
+        aria-label={label}
+        inputMode="decimal"
+        onChange={(e) => handleNum(id, field, e.target.value)}
+      />
+    </td>
+  );
 
   return (
     <div className="min-h-screen bg-paper text-ink font-display antialiased">
