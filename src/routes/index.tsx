@@ -213,19 +213,19 @@ function Index() {
                       <td className="select-none px-3 py-2 text-inksoft">
                         {String(i + 1).padStart(2, "0")}
                       </td>
-                      {textCell(row.id, row, "code", "Code")}
-                      {textCell(row.id, row, "name", "Medicine name", "font-display")}
-                      {textCell(row.id, row, "batchNo", "Batch")}
-                      {textCell(row.id, row, "cmp", "Company", "font-display")}
-                      {numCell(row.id, row, "retail", "0.00", "w-24")}
-                      {numCell(row.id, row, "cpDis", "0", "w-16")}
+                      {textCell(row.id, row, "code", `Code (row ${i + 1})`, "Code")}
+                      {textCell(row.id, row, "name", `Medicine name (row ${i + 1})`, "Medicine name", "font-display")}
+                      {textCell(row.id, row, "batchNo", `Batch No (row ${i + 1})`, "Batch")}
+                      {textCell(row.id, row, "cmp", `Company (row ${i + 1})`, "Company", "font-display")}
+                      {numCell(row.id, row, "retail", `Retail (row ${i + 1})`, "w-24")}
+                      {numCell(row.id, row, "cpDis", `Cp Dis % (row ${i + 1})`, "w-16")}
                       <td className="cell-calc px-3 py-2 text-right font-semibold text-gold">
                         {fmt(c.tp)}
                       </td>
-                      {numCell(row.id, row, "stock", "0", "w-20")}
-                      {numCell(row.id, row, "bon", "0", "w-14")}
-                      {numCell(row.id, row, "stax", "0", "w-14")}
-                      {numCell(row.id, row, "disc", "0", "w-16")}
+                      {numCell(row.id, row, "stock", `Stock (row ${i + 1})`, "w-20")}
+                      {numCell(row.id, row, "bon", `Bon (row ${i + 1})`, "w-14")}
+                      {numCell(row.id, row, "stax", `STax % (row ${i + 1})`, "w-14")}
+                      {numCell(row.id, row, "disc", `Disc % (row ${i + 1})`, "w-16")}
                       <td className="cell-calc px-3 py-2 text-right font-semibold text-gold">
                         {fmt(c.sPrice)}
                       </td>
