@@ -100,6 +100,7 @@ function Index() {
     id: string,
     row: StockRow,
     field: keyof StockRow,
+    label: string,
     placeholder: string,
     extra?: string,
   ) => (
@@ -108,14 +109,14 @@ function Index() {
         className={`cell-input font-mono text-[13px] ${extra ?? ""}`}
         value={row[field]}
         placeholder={placeholder}
+        aria-label={label}
         onChange={(e) => updateRow(id, field, e.target.value)}
-        aria-label={placeholder}
       />
     </td>
   );
 
-  const numCell = (id: string, row: StockRow, field: keyof StockRow, placeholder: string, w: string) =>
-    textCell(id, row, field, placeholder, `${w} text-right`);
+  const numCell = (id: string, row: StockRow, field: keyof StockRow, label: string, w: string) =>
+    textCell(id, row, field, label, "0", `${w} text-right`);
 
   return (
     <div className="min-h-screen bg-paper text-ink font-display antialiased">
