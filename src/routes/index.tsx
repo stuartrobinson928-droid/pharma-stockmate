@@ -8,6 +8,16 @@ import {
   num,
   type StockRow,
 } from "@/lib/stock";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -32,6 +42,7 @@ export const Route = createFileRoute("/")({
 });
 
 const STORAGE_KEY = "stock-addition-rows-v1";
+const BACKUP_KEY = "stock-addition-rows-backup-v1";
 
 const seedRows = (): StockRow[] => {
   const base = emptyRow();
@@ -320,6 +331,32 @@ function Index() {
             Reset sample
           </button>
           <button
+            onClick={restoreBackup}
+            disabled={!hasBackup}
+            className="inline-flex items-center gap-2 rounded-lg bg-sheet px-3 py-2 text-sm font-medium text-ink ring-1 ring-ink/10 transition-colors hover:bg-muted disabled:opacity-40"
+          >
+            Restore backup
+          </button>
+          <button
+            onClick={exportBackup}
+            className="inline-flex items-center gap-2 rounded-lg bg-sheet px-3 py-2 text-sm font-medium text-ink ring-1 ring-ink/10 transition-colors hover:bg-muted"
+          >
+            Download backup
+          </button>
+          <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-sheet px-3 py-2 text-sm font-medium text-ink ring-1 ring-ink/10 transition-colors hover:bg-muted">
+            Load backup
+            <input
+              type="file"
+              accept="application/json,.json"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) importBackup(f);
+                e.target.value = "";
+              }}
+            />
+          </label>
+          <button
             onClick={() => window.print()}
             className="inline-flex items-center gap-2 rounded-lg bg-ink px-3 py-2 text-sm font-medium text-paper ring-1 ring-ink/40 transition-colors hover:bg-inksoft"
           >
@@ -330,6 +367,13 @@ function Index() {
             {rows.length} {rows.length === 1 ? "line" : "lines"} · auto-calculated · saved locally
           </span>
         </div>
+
+        {error && (
+          <div role="alert" className="no-print mb-3 flex items-center justify-between rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive ring-1 ring-destructive/30">
+            {error}
+            <button onClick={() => setError(null)} aria-label="Dismiss" className="px-2">✕</button>
+          </div>
+        )}
 
         {/* Table card */}
         <div className="print-sheet overflow-hidden rounded-2xl bg-sheet ring-1 ring-ink/10">
@@ -357,10 +401,14 @@ function Index() {
               <tbody className="font-mono text-[13px]">
                 {rows.map((row, i) => {
                   const c = computeRow(row);
+                  const issue = rowIssue(row);
                   return (
-                    <tr key={row.id} className="border-b border-rule/70">
-                      <td className="select-none px-3 py-2 text-inksoft">
-                        {String(i + 1).padStart(2, "0")}
+                    <tr key={row.id} className={`border-b border-rule/70 ${issue ? "bg-destructive/5" : ""}`}>
+                      <td
+                        className={`select-none px-3 py-2 ${issue ? "text-destructive font-semibold" : "text-inksoft"}`}
+                        title={issue ?? undefined}
+                      >
+                        {issue ? "!" : ""}{String(i + 1).padStart(2, "0")}
                       </td>
                       {textCell(row.id, row, "code", `Code (row ${i + 1})`, "Code")}
                       {textCell(row.id, row, "name", `Medicine name (row ${i + 1})`, "Medicine name", "font-display")}
@@ -386,7 +434,7 @@ function Index() {
                       </td>
                       <td className="no-print px-1 py-1 text-center">
                         <button
-                          onClick={() => deleteRow(row.id)}
+                          onClick={() => deleteRow(row.id, i)}
                           aria-label={`Delete row ${i + 1}`}
                           className="inline-grid size-6 place-items-center text-inksoft transition-colors hover:text-destructive"
                         >
@@ -433,10 +481,44 @@ function Index() {
           </div>
         </div>
 
+        {rows.some(rowIssue) && (
+          <p className="no-print mt-3 text-sm text-destructive">
+            Rows marked "!" need attention: {rows.map((r, i) => (rowIssue(r) ? `row ${i + 1} — ${rowIssue(r)}` : null)).filter(Boolean).join("; ")}
+          </p>
+        )}
+
         <p className="mt-4 font-mono text-xs text-pretty text-inksoft">
           TP = Retail × (100 − Cp Dis %) / 100 · S.Price = TP · Net Unit = TP × (100 − Disc %) / 100 · Item Total = Net Unit × Stock
         </p>
+
+        <footer className="mt-10 flex flex-wrap items-center justify-between gap-2 border-t border-rule pt-4 text-xs text-inksoft">
+          <span className="font-display">Stock Addition Calculator · Accurate figures, every batch.</span>
+          <span className="font-display font-medium text-ink">
+            Developed by Saud Saeed<sup className="ml-0.5 text-[9px]">™</sup>
+          </span>
+        </footer>
       </div>
+
+      <AlertDialog open={!!confirm} onOpenChange={(o) => !o && setConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{confirm?.title}</AlertDialogTitle>
+            <AlertDialogDescription>{confirm?.body}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                confirm?.action();
+                setConfirm(null);
+              }}
+            >
+              Yes, continue
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
