@@ -8,6 +8,16 @@ import {
   num,
   type StockRow,
 } from "@/lib/stock";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -32,6 +42,7 @@ export const Route = createFileRoute("/")({
 });
 
 const STORAGE_KEY = "stock-addition-rows-v1";
+const BACKUP_KEY = "stock-addition-rows-backup-v1";
 
 const seedRows = (): StockRow[] => {
   const base = emptyRow();
@@ -83,18 +94,156 @@ function Index() {
     return { stock, grand };
   }, [rows, calcs]);
 
+  // Ask the browser to keep this site's storage permanently (not auto-evicted)
+  useEffect(() => {
+    navigator.storage?.persist?.().catch(() => {});
+    try {
+      setHasBackup(!!localStorage.getItem(BACKUP_KEY));
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const [hasBackup, setHasBackup] = useState(false);
+  const [confirm, setConfirm] = useState<null | {
+    title: string;
+    body: string;
+    action: () => void;
+  }>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const snapshot = () => {
+    try {
+      localStorage.setItem(BACKUP_KEY, JSON.stringify(rows));
+      setHasBackup(true);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const restoreBackup = () => {
+    try {
+      const raw = localStorage.getItem(BACKUP_KEY);
+      const parsed = raw ? JSON.parse(raw) : null;
+      if (Array.isArray(parsed) && parsed.length) {
+        localStorage.setItem(BACKUP_KEY, JSON.stringify(rows));
+        setRows(parsed);
+      }
+    } catch {
+      setError("Could not restore the backup.");
+    }
+  };
+
   const updateRow = (id: string, field: keyof StockRow, value: string) => {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
   };
 
   const addRow = () => setRows((prev) => [...prev, emptyRow()]);
 
-  const deleteRow = (id: string) =>
-    setRows((prev) => (prev.length > 1 ? prev.filter((r) => r.id !== id) : [emptyRow()]));
+  const rowHasData = (r: StockRow) =>
+    ["code", "name", "batchNo", "cmp", "retail", "cpDis", "stock", "bon", "stax", "disc"].some(
+      (k) => String(r[k as keyof StockRow] ?? "").trim() !== "",
+    );
 
-  const clearAll = () => setRows([emptyRow()]);
+  const deleteRow = (id: string, index: number) => {
+    const doDelete = () => {
+      snapshot();
+      setRows((prev) => (prev.length > 1 ? prev.filter((r) => r.id !== id) : [emptyRow()]));
+    };
+    const row = rows.find((r) => r.id === id);
+    if (row && rowHasData(row)) {
+      setConfirm({
+        title: `Delete row ${index + 1}?`,
+        body: `"${row.name || row.code || "This line"}" will be removed. You can undo with "Restore backup".`,
+        action: doDelete,
+      });
+    } else doDelete();
+  };
 
-  const resetToSample = () => setRows(seedRows());
+  const clearAll = () =>
+    setConfirm({
+      title: "Clear the whole sheet?",
+      body: `All ${rows.length} line(s) will be erased. A backup is kept so you can restore it.`,
+      action: () => {
+        snapshot();
+        setRows([emptyRow()]);
+      },
+    });
+
+  const resetToSample = () =>
+    setConfirm({
+      title: "Replace sheet with sample?",
+      body: "Your current lines will be replaced. A backup is kept so you can restore it.",
+      action: () => {
+        snapshot();
+        setRows(seedRows());
+      },
+    });
+
+  const exportBackup = () => {
+    const blob = new Blob([JSON.stringify(rows, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `stock-sheet-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
+  const importBackup = (file: File) => {
+    file.text().then((txt) => {
+      try {
+        const parsed = JSON.parse(txt);
+        if (!Array.isArray(parsed) || !parsed.length || !parsed.every((r) => r && typeof r.id === "string")) {
+          throw new Error();
+        }
+        const clean = parsed.map((r) => ({ ...emptyRow(), ...r })) as StockRow[];
+        setConfirm({
+          title: "Load this backup file?",
+          body: `${clean.length} line(s) will replace the current sheet. Current sheet is kept as a backup.`,
+          action: () => {
+            snapshot();
+            setRows(clean);
+          },
+        });
+      } catch {
+        setError("That file is not a valid stock sheet backup.");
+      }
+    });
+  };
+
+  // ---- validation ----
+  const NUM_RULES: Partial<Record<keyof StockRow, { max?: number; int?: boolean }>> = {
+    retail: { max: 10_000_000 },
+    cpDis: { max: 100 },
+    stock: { int: true, max: 10_000_000 },
+    bon: { int: true, max: 10_000_000 },
+    stax: { max: 100 },
+    disc: { max: 100 },
+  };
+
+  const handleNum = (id: string, field: keyof StockRow, value: string) => {
+    const rule = NUM_RULES[field] ?? {};
+    const v = value.replace(/,/g, "").trim();
+    const re = rule.int ? /^\d*$/ : /^\d*\.?\d{0,2}$/;
+    if (!re.test(v)) {
+      setError(rule.int ? "Only whole numbers allowed here." : "Only numbers with up to 2 decimals allowed.");
+      return;
+    }
+    if (rule.max !== undefined && v !== "" && Number(v) > rule.max) {
+      setError(rule.max === 100 ? "Percentage cannot exceed 100." : "Value is too large.");
+      return;
+    }
+    setError(null);
+    updateRow(id, field, v);
+  };
+
+  const rowIssue = (r: StockRow): string | null => {
+    const hasNums = num(r.retail) > 0 || num(r.stock) > 0;
+    if (hasNums && !r.name.trim()) return "Medicine name is missing";
+    if (num(r.stock) > 0 && num(r.retail) <= 0) return "Retail price is missing";
+    if (num(r.retail) > 0 && num(r.stock) <= 0) return "Stock quantity is missing";
+    return null;
+  };
 
   const textCell = (
     id: string,
@@ -110,13 +259,24 @@ function Index() {
         value={row[field]}
         placeholder={placeholder}
         aria-label={label}
+        maxLength={80}
         onChange={(e) => updateRow(id, field, e.target.value)}
       />
     </td>
   );
 
-  const numCell = (id: string, row: StockRow, field: keyof StockRow, label: string, w: string) =>
-    textCell(id, row, field, label, "0", `${w} text-right`);
+  const numCell = (id: string, row: StockRow, field: keyof StockRow, label: string, w: string) => (
+    <td className="px-1 py-1">
+      <input
+        className={`cell-input font-mono text-[13px] ${w} text-right`}
+        value={row[field]}
+        placeholder="0"
+        aria-label={label}
+        inputMode="decimal"
+        onChange={(e) => handleNum(id, field, e.target.value)}
+      />
+    </td>
+  );
 
   return (
     <div className="min-h-screen bg-paper text-ink font-display antialiased">
@@ -171,6 +331,32 @@ function Index() {
             Reset sample
           </button>
           <button
+            onClick={restoreBackup}
+            disabled={!hasBackup}
+            className="inline-flex items-center gap-2 rounded-lg bg-sheet px-3 py-2 text-sm font-medium text-ink ring-1 ring-ink/10 transition-colors hover:bg-muted disabled:opacity-40"
+          >
+            Restore backup
+          </button>
+          <button
+            onClick={exportBackup}
+            className="inline-flex items-center gap-2 rounded-lg bg-sheet px-3 py-2 text-sm font-medium text-ink ring-1 ring-ink/10 transition-colors hover:bg-muted"
+          >
+            Download backup
+          </button>
+          <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-sheet px-3 py-2 text-sm font-medium text-ink ring-1 ring-ink/10 transition-colors hover:bg-muted">
+            Load backup
+            <input
+              type="file"
+              accept="application/json,.json"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) importBackup(f);
+                e.target.value = "";
+              }}
+            />
+          </label>
+          <button
             onClick={() => window.print()}
             className="inline-flex items-center gap-2 rounded-lg bg-ink px-3 py-2 text-sm font-medium text-paper ring-1 ring-ink/40 transition-colors hover:bg-inksoft"
           >
@@ -181,6 +367,13 @@ function Index() {
             {rows.length} {rows.length === 1 ? "line" : "lines"} · auto-calculated · saved locally
           </span>
         </div>
+
+        {error && (
+          <div role="alert" className="no-print mb-3 flex items-center justify-between rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive ring-1 ring-destructive/30">
+            {error}
+            <button onClick={() => setError(null)} aria-label="Dismiss" className="px-2">✕</button>
+          </div>
+        )}
 
         {/* Table card */}
         <div className="print-sheet overflow-hidden rounded-2xl bg-sheet ring-1 ring-ink/10">
@@ -208,10 +401,14 @@ function Index() {
               <tbody className="font-mono text-[13px]">
                 {rows.map((row, i) => {
                   const c = computeRow(row);
+                  const issue = rowIssue(row);
                   return (
-                    <tr key={row.id} className="border-b border-rule/70">
-                      <td className="select-none px-3 py-2 text-inksoft">
-                        {String(i + 1).padStart(2, "0")}
+                    <tr key={row.id} className={`border-b border-rule/70 ${issue ? "bg-destructive/5" : ""}`}>
+                      <td
+                        className={`select-none px-3 py-2 ${issue ? "text-destructive font-semibold" : "text-inksoft"}`}
+                        title={issue ?? undefined}
+                      >
+                        {issue ? "!" : ""}{String(i + 1).padStart(2, "0")}
                       </td>
                       {textCell(row.id, row, "code", `Code (row ${i + 1})`, "Code")}
                       {textCell(row.id, row, "name", `Medicine name (row ${i + 1})`, "Medicine name", "font-display")}
@@ -237,7 +434,7 @@ function Index() {
                       </td>
                       <td className="no-print px-1 py-1 text-center">
                         <button
-                          onClick={() => deleteRow(row.id)}
+                          onClick={() => deleteRow(row.id, i)}
                           aria-label={`Delete row ${i + 1}`}
                           className="inline-grid size-6 place-items-center text-inksoft transition-colors hover:text-destructive"
                         >
@@ -284,10 +481,44 @@ function Index() {
           </div>
         </div>
 
+        {rows.some(rowIssue) && (
+          <p className="no-print mt-3 text-sm text-destructive">
+            Rows marked "!" need attention: {rows.map((r, i) => (rowIssue(r) ? `row ${i + 1} — ${rowIssue(r)}` : null)).filter(Boolean).join("; ")}
+          </p>
+        )}
+
         <p className="mt-4 font-mono text-xs text-pretty text-inksoft">
           TP = Retail × (100 − Cp Dis %) / 100 · S.Price = TP · Net Unit = TP × (100 − Disc %) / 100 · Item Total = Net Unit × Stock
         </p>
+
+        <footer className="mt-10 flex flex-wrap items-center justify-between gap-2 border-t border-rule pt-4 text-xs text-inksoft">
+          <span className="font-display">Stock Addition Calculator · Accurate figures, every batch.</span>
+          <span className="font-display font-medium text-ink">
+            Developed by Saud Saeed<sup className="ml-0.5 text-[9px]">™</sup>
+          </span>
+        </footer>
       </div>
+
+      <AlertDialog open={!!confirm} onOpenChange={(o) => !o && setConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{confirm?.title}</AlertDialogTitle>
+            <AlertDialogDescription>{confirm?.body}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                confirm?.action();
+                setConfirm(null);
+              }}
+            >
+              Yes, continue
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
